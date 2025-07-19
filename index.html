@@ -1326,7 +1326,14 @@
                 </div>
                 <div class="form-group">
                     <label for="value">Valor Estimado (€)</label>
-                    <input type="number" id="value" name="value" min="0" step="100" placeholder="5000">
+                   <input 
+  type="number" 
+  id="value" 
+  name="value" 
+  min="0" 
+  step="any"  <!-- ¡Clave! Permite cualquier valor -->
+  placeholder="Ej: 2111.50"
+>
                 </div>
                 <div class="form-group">
                     <label for="companySize">Tamaño de Empresa</label>
