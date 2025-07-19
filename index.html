@@ -395,6 +395,11 @@
             color: white;
         }
 
+        .btn-complete {
+            background: #22c55e;
+            color: white;
+        }
+
         .modal {
             display: none;
             position: fixed;
@@ -928,7 +933,7 @@
 
             <div class="tasks-container">
                 <div class="task-section">
-                    <h2>📅 Tareas Personales</h2>
+                    <h2>📝 Tareas Personales</h2>
                     <div id="personalTasksList">
                         <!-- Las tareas personales se cargarán aquí -->
                     </div>
@@ -993,11 +998,6 @@
             <div class="chart-container">
                 <div class="chart-title">Tasa de Conversión por Sector</div>
                 <div class="chart" id="conversionChart"></div>
-            </div>
-
-            <div class="chart-container">
-                <div class="chart-title">Evolución Mensual de Leads</div>
-                <div class="chart" id="monthlyTrendChart"></div>
             </div>
         </div>
 
@@ -1131,11 +1131,6 @@
             <div class="chart-container">
                 <div class="chart-title">Distribución por Fuente de Lead</div>
                 <div class="chart" id="sourceDistributionChart"></div>
-            </div>
-
-            <div class="chart-container">
-                <div class="chart-title">Valor por Tamaño de Empresa</div>
-                <div class="chart" id="companySizeChart"></div>
             </div>
         </div>
     </div>
@@ -1294,19 +1289,26 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
         import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
 
-        // Your web app's Firebase configuration
+        // Your web app's Firebase configuration - DEMO VERSION (Local Storage)
+        // Para usar Firebase real, reemplaza esta configuración con tu proyecto Firebase
+        const USE_FIREBASE = false; // Cambiar a true cuando tengas Firebase configurado
+        
         const firebaseConfig = {
-            apiKey: "AIzaSyD9CjJ2x1Q1XkQ1XkQ1XkQ1XkQ1XkQ1XkQ",
-            authDomain: "visual-growth-crm.firebaseapp.com",
-            projectId: "visual-growth-crm",
-            storageBucket: "visual-growth-crm.appspot.com",
+            apiKey: "tu-api-key-aqui",
+            authDomain: "tu-proyecto.firebaseapp.com",
+            projectId: "tu-proyecto-id",
+            storageBucket: "tu-proyecto.appspot.com",
             messagingSenderId: "123456789012",
-            appId: "1:123456789012:web:abcdef1234567890abcdef"
+            appId: "tu-app-id"
         };
 
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+        // Initialize Firebase or Local Storage
+        let app, db;
+        
+        if (USE_FIREBASE) {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+        }
 
         // Global variables
         let leads = [];
@@ -1315,8 +1317,138 @@
         let editingTaskId = null;
         let charts = {};
 
-        // Firebase functions
-        window.firebaseDB = {
+        // Local Storage functions (fallback when Firebase is not available)
+        const localStorageDB = {
+            async getLeads() {
+                try {
+                    const stored = localStorage.getItem('crm_leads');
+                    return stored ? JSON.parse(stored) : [];
+                } catch (error) {
+                    console.error('Error getting leads from localStorage:', error);
+                    return [];
+                }
+            },
+
+            async getPersonalTasks() {
+                try {
+                    const stored = localStorage.getItem('crm_personal_tasks');
+                    return stored ? JSON.parse(stored) : [];
+                } catch (error) {
+                    console.error('Error getting personal tasks from localStorage:', error);
+                    return [];
+                }
+            },
+
+            async addLead(leadData) {
+                try {
+                    const leads = await this.getLeads();
+                    const newLead = {
+                        id: Date.now().toString(),
+                        ...leadData,
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString()
+                    };
+                    leads.unshift(newLead);
+                    localStorage.setItem('crm_leads', JSON.stringify(leads));
+                    showSuccess('Lead agregado exitosamente');
+                    return newLead.id;
+                } catch (error) {
+                    console.error('Error adding lead to localStorage:', error);
+                    showError('Error al agregar el lead: ' + error.message);
+                    throw error;
+                }
+            },
+
+            async addPersonalTask(taskData) {
+                try {
+                    const tasks = await this.getPersonalTasks();
+                    const newTask = {
+                        id: Date.now().toString(),
+                        ...taskData,
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                        completed: false
+                    };
+                    tasks.push(newTask);
+                    localStorage.setItem('crm_personal_tasks', JSON.stringify(tasks));
+                    showSuccess('Tarea personal agregada exitosamente');
+                    return newTask.id;
+                } catch (error) {
+                    console.error('Error adding personal task to localStorage:', error);
+                    showError('Error al agregar la tarea personal: ' + error.message);
+                    throw error;
+                }
+            },
+
+            async updateLead(leadId, leadData) {
+                try {
+                    const leads = await this.getLeads();
+                    const index = leads.findIndex(lead => lead.id === leadId);
+                    if (index !== -1) {
+                        leads[index] = {
+                            ...leads[index],
+                            ...leadData,
+                            updatedAt: new Date().toISOString()
+                        };
+                        localStorage.setItem('crm_leads', JSON.stringify(leads));
+                        showSuccess('Lead actualizado exitosamente');
+                    }
+                } catch (error) {
+                    console.error('Error updating lead in localStorage:', error);
+                    showError('Error al actualizar el lead: ' + error.message);
+                    throw error;
+                }
+            },
+
+            async updatePersonalTask(taskId, taskData) {
+                try {
+                    const tasks = await this.getPersonalTasks();
+                    const index = tasks.findIndex(task => task.id === taskId);
+                    if (index !== -1) {
+                        tasks[index] = {
+                            ...tasks[index],
+                            ...taskData,
+                            updatedAt: new Date().toISOString()
+                        };
+                        localStorage.setItem('crm_personal_tasks', JSON.stringify(tasks));
+                        showSuccess('Tarea personal actualizada exitosamente');
+                    }
+                } catch (error) {
+                    console.error('Error updating personal task in localStorage:', error);
+                    showError('Error al actualizar la tarea personal: ' + error.message);
+                    throw error;
+                }
+            },
+
+            async deleteLead(leadId) {
+                try {
+                    const leads = await this.getLeads();
+                    const filteredLeads = leads.filter(lead => lead.id !== leadId);
+                    localStorage.setItem('crm_leads', JSON.stringify(filteredLeads));
+                    showSuccess('Lead eliminado exitosamente');
+                } catch (error) {
+                    console.error('Error deleting lead from localStorage:', error);
+                    showError('Error al eliminar el lead: ' + error.message);
+                    throw error;
+                }
+            },
+
+            async deletePersonalTask(taskId) {
+                try {
+                    const tasks = await this.getPersonalTasks();
+                    const filteredTasks = tasks.filter(task => task.id !== taskId);
+                    localStorage.setItem('crm_personal_tasks', JSON.stringify(filteredTasks));
+                    showSuccess('Tarea personal eliminada exitosamente');
+                } catch (error) {
+                    console.error('Error deleting personal task from localStorage:', error);
+                    showError('Error al eliminar la tarea personal: ' + error.message);
+                    throw error;
+                }
+            }
+        };
+
+        // Firebase functions (when available)
+        const firebaseDB = {
             // Get all leads
             async getLeads() {
                 try {
@@ -1492,6 +1624,9 @@
             }
         };
 
+        // Unified database interface
+        window.firebaseDB = USE_FIREBASE ? firebaseDB : localStorageDB;
+
         // Password protection
         function checkPassword() {
             const password = document.getElementById('passwordInput').value;
@@ -1525,24 +1660,54 @@
         window.addEventListener('DOMContentLoaded', initializeCRM);
 
         async function initializeCRM() {
-            // Set up real-time listeners
-            window.firebaseDB.listenToLeads((leadsData) => {
-                leads = leadsData;
+            if (USE_FIREBASE) {
+                // Set up real-time listeners for Firebase
+                window.firebaseDB.listenToLeads((leadsData) => {
+                    leads = leadsData;
+                    displayLeads();
+                    updateTasks();
+                    updateStats();
+                    updateFollowUp();
+                    updateReports();
+                    updateCharts();
+                });
+
+                window.firebaseDB.listenToPersonalTasks((tasksData) => {
+                    personalTasks = tasksData;
+                    updateTasks();
+                });
+            } else {
+                // Load data from localStorage and set up periodic refresh
+                await loadLocalStorageData();
+                
+                // Refresh data every 500ms to simulate real-time updates
+                setInterval(async () => {
+                    await loadLocalStorageData();
+                }, 500);
+            }
+
+            // Set up event listeners
+            setupEventListeners();
+        }
+
+        async function loadLocalStorageData() {
+            const newLeads = await window.firebaseDB.getLeads();
+            const newTasks = await window.firebaseDB.getPersonalTasks();
+            
+            // Only update if data has changed
+            if (JSON.stringify(newLeads) !== JSON.stringify(leads)) {
+                leads = newLeads;
                 displayLeads();
-                updateTasks();
                 updateStats();
                 updateFollowUp();
                 updateReports();
                 updateCharts();
-            });
-
-            window.firebaseDB.listenToPersonalTasks((tasksData) => {
-                personalTasks = tasksData;
+            }
+            
+            if (JSON.stringify(newTasks) !== JSON.stringify(personalTasks)) {
+                personalTasks = newTasks;
                 updateTasks();
-            });
-
-            // Set up event listeners
-            setupEventListeners();
+            }
         }
 
         function setupEventListeners() {
@@ -1553,7 +1718,12 @@
 
             // Form submissions
             document.getElementById('leadForm').addEventListener('submit', handleLeadFormSubmit);
-            document.getElementById('personalTaskForm').addEventListener('submit', handlePersonalTaskFormSubmit);
+            
+            // Ensure personal task form exists before adding listener
+            const personalTaskForm = document.getElementById('personalTaskForm');
+            if (personalTaskForm) {
+                personalTaskForm.addEventListener('submit', handlePersonalTaskFormSubmit);
+            }
 
             // Close modals when clicking outside
             document.getElementById('leadModal').addEventListener('click', (e) => {
@@ -1590,11 +1760,23 @@
             }
         }
 
+        // Corrected personal task form handler
         async function handlePersonalTaskFormSubmit(e) {
             e.preventDefault();
             
             const formData = new FormData(e.target);
-            const taskData = Object.fromEntries(formData.entries());
+            const taskData = {
+                title: formData.get('title'),
+                description: formData.get('description'),
+                dueDate: formData.get('dueDate'),
+                priority: formData.get('priority')
+            };
+            
+            // Validation
+            if (!taskData.title || !taskData.dueDate || !taskData.priority) {
+                showError('Por favor, completa todos los campos requeridos');
+                return;
+            }
             
             try {
                 if (editingTaskId) {
@@ -1603,8 +1785,14 @@
                     await window.firebaseDB.addPersonalTask(taskData);
                 }
                 closePersonalTaskModal();
+                
+                // Refresh data immediately for localStorage
+                if (!USE_FIREBASE) {
+                    await loadLocalStorageData();
+                }
             } catch (error) {
-                // Error is already handled in Firebase functions
+                console.error('Error saving personal task:', error);
+                showError('Error al guardar la tarea: ' + error.message);
             }
         }
 
@@ -1718,7 +1906,7 @@
         function updateTasks() {
             const today = new Date().toISOString().split('T')[0];
             
-            // Update personal tasks
+            // Update personal tasks - showing today's tasks
             const todayPersonalTasks = personalTasks.filter(task => 
                 task.dueDate === today && !task.completed
             );
@@ -1751,7 +1939,7 @@
                 });
             }
             
-            // Update lead tasks
+            // Update lead tasks - showing today's tasks
             const todayLeadTasks = leads.filter(lead => 
                 lead.nextActionDate && lead.nextActionDate === today
             );
@@ -1790,13 +1978,13 @@
                 });
             }
             
-            // Update all tasks table
+            // Update all tasks table - showing all tasks (personal and lead)
             const allTasksTable = document.getElementById('allTasksTable');
             allTasksTable.innerHTML = '';
             
             // Combine and sort all tasks (personal and lead)
             const allTasks = [
-                ...personalTasks.map(task => ({ ...task, type: 'Personal' })),
+                ...personalTasks.filter(task => !task.completed).map(task => ({ ...task, type: 'Personal' })),
                 ...leads.filter(lead => lead.nextActionDate).map(lead => ({
                     id: lead.id,
                     title: lead.nextAction,
@@ -1899,8 +2087,11 @@
         function completePersonalTask(taskId) {
             window.firebaseDB.updatePersonalTask(taskId, {
                 completed: true
-            }).then(() => {
+            }).then(async () => {
                 showSuccess('Tarea personal completada exitosamente');
+                if (!USE_FIREBASE) {
+                    await loadLocalStorageData();
+                }
             });
         }
 
@@ -1916,8 +2107,11 @@
             // Update task
             window.firebaseDB.updatePersonalTask(taskId, {
                 dueDate: tomorrowStr
-            }).then(() => {
+            }).then(async () => {
                 showSuccess('Tarea personal pospuesta para mañana');
+                if (!USE_FIREBASE) {
+                    await loadLocalStorageData();
+                }
             });
         }
 
@@ -2183,7 +2377,7 @@
         }
 
         function updateCharts() {
-            // Conversion rate by sector chart
+            // Only keep conversion by sector chart (removed monthly trend and company size charts)
             const sectorConversion = {};
             leads.forEach(lead => {
                 if (lead.lineOfBusiness) {
@@ -2230,52 +2424,7 @@
                 }
             });
             
-            // Monthly trend chart
-            const monthlyTrend = {};
-            leads.forEach(lead => {
-                const date = lead.createdAt.toDate ? lead.createdAt.toDate() : new Date(lead.createdAt);
-                const monthYear = `${date.getMonth()+1}/${date.getFullYear()}`;
-                
-                if (!monthlyTrend[monthYear]) {
-                    monthlyTrend[monthYear] = 0;
-                }
-                monthlyTrend[monthYear]++;
-            });
-            
-            const trendLabels = Object.keys(monthlyTrend).sort((a, b) => {
-                const [aMonth, aYear] = a.split('/').map(Number);
-                const [bMonth, bYear] = b.split('/').map(Number);
-                return aYear === bYear ? aMonth - bMonth : aYear - bYear;
-            });
-            
-            const trendData = trendLabels.map(label => monthlyTrend[label]);
-            
-            renderChart('monthlyTrendChart', {
-                type: 'line',
-                data: {
-                    labels: trendLabels,
-                    datasets: [{
-                        label: 'Leads por Mes',
-                        data: trendData,
-                        backgroundColor: 'rgba(34, 197, 94, 0.2)',
-                        borderColor: '#22c55e',
-                        borderWidth: 2,
-                        tension: 0.1,
-                        fill: true
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true
-                        }
-                    }
-                }
-            });
-            
-            // Source distribution chart
+            // Source distribution chart for reports section
             const sourceDistribution = {};
             leads.forEach(lead => {
                 if (lead.source) {
@@ -2305,49 +2454,6 @@
                     plugins: {
                         legend: {
                             position: 'right'
-                        }
-                    }
-                }
-            });
-            
-            // Company size chart
-            const companySizeValues = {};
-            leads.forEach(lead => {
-                if (lead.companySize && lead.value) {
-                    companySizeValues[lead.companySize] = (companySizeValues[lead.companySize] || 0) + lead.value;
-                }
-            });
-            
-            const companySizeLabels = Object.keys(companySizeValues).map(size => {
-                const sizeMap = {
-                    'startup': 'Startup',
-                    'pequena': 'Pequeña',
-                    'mediana': 'Mediana',
-                    'grande': 'Grande'
-                };
-                return sizeMap[size] || size;
-            });
-            
-            const companySizeData = Object.values(companySizeValues);
-            
-            renderChart('companySizeChart', {
-                type: 'bar',
-                data: {
-                    labels: companySizeLabels,
-                    datasets: [{
-                        label: 'Valor por Tamaño de Empresa (€)',
-                        data: companySizeData,
-                        backgroundColor: '#8b5cf6',
-                        borderColor: '#7c3aed',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true
                         }
                     }
                 }
@@ -2415,13 +2521,11 @@
                 if (task) {
                     title.textContent = 'Editar Tarea Personal';
                     
-                    // Fill form with existing data
-                    Object.keys(task).forEach(key => {
-                        const field = document.getElementById('task' + key.charAt(0).toUpperCase() + key.slice(1));
-                        if (field) {
-                            field.value = task[key] || '';
-                        }
-                    });
+                    // Fill form with existing data using correct field IDs
+                    document.getElementById('taskTitle').value = task.title || '';
+                    document.getElementById('taskDescription').value = task.description || '';
+                    document.getElementById('taskDueDate').value = task.dueDate || '';
+                    document.getElementById('taskPriority').value = task.priority || 'media';
                 }
             } else {
                 title.textContent = 'Nueva Tarea Personal';
@@ -2429,6 +2533,7 @@
                 
                 // Set default date to today
                 document.getElementById('taskDueDate').value = new Date().toISOString().split('T')[0];
+                document.getElementById('taskPriority').value = 'media';
             }
             
             modal.style.display = 'block';
@@ -2462,8 +2567,11 @@
             if (confirm('¿Estás seguro de que quieres eliminar esta tarea personal?')) {
                 try {
                     await window.firebaseDB.deletePersonalTask(taskId);
+                    if (!USE_FIREBASE) {
+                        await loadLocalStorageData();
+                    }
                 } catch (error) {
-                    // Error is already handled in Firebase functions
+                    showError('Error al eliminar la tarea: ' + error.message);
                 }
             }
         }
