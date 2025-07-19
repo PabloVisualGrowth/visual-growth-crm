@@ -761,9 +761,115 @@
             font-size: 0.9rem;
         }
 
-        .stat-value-advanced {
-            font-weight: 600;
-            color: #1f2937;
+        .editor-container {
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            background: white;
+        }
+
+        .editor-container:focus-within {
+            border-color: #22c55e;
+            box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
+        }
+
+        .ql-toolbar {
+            border: none;
+            border-bottom: 1px solid #e5e7eb;
+            background: #f8fafc;
+        }
+
+        .ql-container {
+            border: none;
+            font-family: inherit;
+        }
+
+        .ql-editor {
+            min-height: 150px;
+            font-family: inherit;
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+
+        .notes-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8fafc;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .btn-download {
+            background: #3b82f6;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-download:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+        }
+
+        .btn-clear {
+            background: #ef4444;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-clear:hover {
+            background: #dc2626;
+        }
+
+        /* Hide duplicate toolbar */
+        .ql-toolbar.ql-snow + .ql-toolbar.ql-snow {
+            display: none;
+        }
+
+        /* PDF preview container for generating */
+        .pdf-preview {
+            position: fixed;
+            left: -9999px;
+            top: -9999px;
+            background: white;
+            padding: 40px;
+            width: 210mm;
+            min-height: 297mm;
+            font-family: Arial, sans-serif;
+            box-sizing: border-box;
+        }
+
+        .pdf-preview h1 {
+            color: #22c55e;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+
+        .pdf-preview .info-section {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            border-left: 4px solid #22c55e;
+        }
+
+        .pdf-preview .content-section {
+            line-height: 1.6;
+            font-size: 14px;
         }
 
         @media (max-width: 768px) {
@@ -831,6 +937,9 @@
             <div class="header-content">
                 <h1>🤖 Visual&Growth CRM</h1>
                 <p>Sistema de Gestión de Leads - Agentes Virtuales</p>
+                <button onclick="downloadCompleteCRM()" style="position: absolute; top: 20px; right: 20px; background: #3b82f6; color: white; border: none; padding: 10px 15px; border-radius: 8px; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 6px; transition: all 0.2s ease;">
+                    💾 Exportar CRM
+                </button>
             </div>
         </div>
 
@@ -1238,8 +1347,22 @@
                     <input type="date" id="nextActionDate" name="nextActionDate">
                 </div>
                 <div class="form-group">
-                    <label for="notes">Notas</label>
-                    <textarea id="notes" name="notes" rows="4" placeholder="Escribe aquí las notas del lead..."></textarea>
+                    <label for="notes">Notas del Lead</label>
+                    <div class="editor-container">
+                        <div id="notesEditor"></div>
+                        <div class="notes-actions">
+                            <button type="button" class="btn-download" onclick="downloadNotes()">
+                                📄 Descargar Notas
+                            </button>
+                            <button type="button" class="btn-clear" onclick="clearNotes()">
+                                🗑️ Limpiar
+                            </button>
+                            <span style="color: #6b7280; font-size: 0.8rem; margin-left: auto;">
+                                Usa la barra de herramientas para formatear el texto
+                            </span>
+                        </div>
+                    </div>
+                    <input type="hidden" id="notes" name="notes">
                 </div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
@@ -1282,8 +1405,10 @@
         </div>
     </div>
 
-    <!-- Scripts de Firebase y Chart.js -->
+    <!-- Scripts de Firebase, Chart.js y Editor -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" rel="stylesheet">
     <script type="module">
         // Import the functions you need from the SDKs you need
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
@@ -1316,6 +1441,7 @@
         let editingLeadId = null;
         let editingTaskId = null;
         let charts = {};
+        let notesEditor = null;
 
         // Local Storage functions (fallback when Firebase is not available)
         const localStorageDB = {
@@ -1688,6 +1814,62 @@
 
             // Set up event listeners
             setupEventListeners();
+            
+            // Initialize notes editor
+            initializeNotesEditor();
+        }
+
+        function initializeNotesEditor() {
+            // Initialize Quill editor for notes only once
+            if (typeof Quill !== 'undefined' && !notesEditor) {
+                const editorElement = document.getElementById('notesEditor');
+                if (editorElement && !editorElement.classList.contains('ql-container')) {
+                    notesEditor = new Quill('#notesEditor', {
+                        theme: 'snow',
+                        placeholder: 'Escribe aquí las notas del lead...',
+                        modules: {
+                            toolbar: [
+                                [{ 'header': [1, 2, 3, false] }],
+                                ['bold', 'italic', 'underline', 'strike'],
+                                [{ 'color': [] }, { 'background': [] }],
+                                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                                [{ 'indent': '-1'}, { 'indent': '+1' }],
+                                [{ 'align': [] }],
+                                ['link', 'blockquote', 'code-block'],
+                                ['clean']
+                            ]
+                        }
+                    });
+
+                    // Update hidden input when editor content changes
+                    notesEditor.on('text-change', function() {
+                        const htmlContent = notesEditor.root.innerHTML;
+                        document.getElementById('notes').value = htmlContent;
+                    });
+                }
+            } else if (!notesEditor) {
+                console.warn('Quill editor not loaded, falling back to textarea');
+                // Fallback: show a textarea if Quill doesn't load
+                const editorContainer = document.querySelector('.editor-container');
+                if (editorContainer) {
+                    editorContainer.innerHTML = `
+                        <textarea id="notesFallback" rows="6" style="width: 100%; padding: 12px; border: none; resize: vertical;" 
+                                  placeholder="Escribe aquí las notas del lead..."></textarea>
+                        <div class="notes-actions">
+                            <button type="button" class="btn-download" onclick="downloadNotes()">
+                                📄 Descargar como PDF
+                            </button>
+                            <button type="button" class="btn-clear" onclick="clearNotes()">
+                                🗑️ Limpiar
+                            </button>
+                        </div>
+                    `;
+                    
+                    document.getElementById('notesFallback').addEventListener('input', function() {
+                        document.getElementById('notes').value = this.value;
+                    });
+                }
+            }
         }
 
         async function loadLocalStorageData() {
@@ -1748,6 +1930,11 @@
             // Convert value to number
             leadData.value = parseFloat(leadData.value) || 0;
             
+            // Get notes from editor
+            if (notesEditor) {
+                leadData.notes = notesEditor.root.innerHTML;
+            }
+            
             try {
                 if (editingLeadId) {
                     await window.firebaseDB.updateLead(editingLeadId, leadData);
@@ -1755,8 +1942,13 @@
                     await window.firebaseDB.addLead(leadData);
                 }
                 closeModal();
+                
+                // Refresh data immediately for localStorage
+                if (!USE_FIREBASE) {
+                    await loadLocalStorageData();
+                }
             } catch (error) {
-                // Error is already handled in Firebase functions
+                showError('Error al guardar el lead: ' + error.message);
             }
         }
 
@@ -1894,7 +2086,9 @@
                             </div>
                             <div class="detail-item">
                                 <h4>Notas</h4>
-                                <p>${lead.notes || 'No hay notas registradas'}</p>
+                                <div style="max-height: 200px; overflow-y: auto; padding: 10px; background: #f8fafc; border-radius: 6px;">
+                                    ${lead.notes ? lead.notes : '<p style="color: #6b7280; font-style: italic;">No hay notas registradas</p>'}
+                                </div>
                             </div>
                         </div>
                     </td>
@@ -2487,14 +2681,24 @@
                     // Fill form with existing data
                     Object.keys(lead).forEach(key => {
                         const field = document.getElementById(key);
-                        if (field) {
+                        if (field && key !== 'notes') {
                             field.value = lead[key] || '';
                         }
                     });
+                    
+                    // Set notes in editor
+                    if (notesEditor && lead.notes) {
+                        notesEditor.root.innerHTML = lead.notes;
+                    }
                 }
             } else {
                 title.textContent = 'Agregar Nuevo Lead';
                 form.reset();
+                
+                // Clear notes editor
+                if (notesEditor) {
+                    notesEditor.setText('');
+                }
                 
                 // Set default date to today + 1 day
                 const tomorrow = new Date();
@@ -2508,6 +2712,128 @@
         window.closeModal = function() {
             document.getElementById('leadModal').style.display = 'none';
             editingLeadId = null;
+        }
+
+        // Notes editor functions
+        window.downloadNotes = function() {
+            const textContent = notesEditor ? notesEditor.getText() : (document.getElementById('notesFallback')?.value || '');
+            
+            if (!textContent.trim()) {
+                showError('No hay contenido para descargar');
+                return;
+            }
+
+            try {
+                // Get lead info for filename
+                let filename = 'notas-lead';
+                let company = 'Sin especificar';
+                let contact = 'Sin especificar';
+                
+                if (editingLeadId) {
+                    const lead = leads.find(l => l.id === editingLeadId);
+                    if (lead) {
+                        company = lead.company || 'Sin especificar';
+                        contact = lead.contact || 'Sin especificar';
+                        filename = `notas-${lead.company?.toLowerCase().replace(/\s+/g, '-') || 'lead'}`;
+                    }
+                } else {
+                    const companyField = document.getElementById('company');
+                    const contactField = document.getElementById('contact');
+                    if (companyField?.value) {
+                        company = companyField.value;
+                        filename = `notas-${companyField.value.toLowerCase().replace(/\s+/g, '-')}`;
+                    }
+                    if (contactField?.value) {
+                        contact = contactField.value;
+                    }
+                }
+                
+                // Create text content
+                const documentContent = `
+NOTAS DEL LEAD
+===============================================
+
+📋 INFORMACIÓN DEL LEAD:
+Empresa: ${company}
+Contacto: ${contact}
+Fecha: ${new Date().toLocaleDateString('es-ES')}
+
+===============================================
+
+📝 CONTENIDO DE LAS NOTAS:
+
+${textContent}
+
+===============================================
+Generado por Visual&Growth CRM
+Fecha: ${new Date().toLocaleString('es-ES')}
+`;
+                
+                // Create and download file
+                const blob = new Blob([documentContent], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${filename}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                showSuccess('Notas descargadas exitosamente');
+                
+            } catch (error) {
+                console.error('Error downloading notes:', error);
+                showError('Error al descargar las notas');
+            }
+        }
+
+        window.clearNotes = function() {
+            if (notesEditor) {
+                if (confirm('¿Estás seguro de que quieres limpiar todas las notas?')) {
+                    notesEditor.setText('');
+                    document.getElementById('notes').value = '';
+                    showSuccess('Notas limpiadas');
+                }
+            } else {
+                const fallbackEditor = document.getElementById('notesFallback');
+                if (fallbackEditor && confirm('¿Estás seguro de que quieres limpiar todas las notas?')) {
+                    fallbackEditor.value = '';
+                    document.getElementById('notes').value = '';
+                    showSuccess('Notas limpiadas');
+                }
+            }
+        }
+
+        // Export complete CRM function
+        window.downloadCompleteCRM = function() {
+            try {
+                // Get current page HTML
+                const htmlContent = document.documentElement.outerHTML;
+                
+                // Create filename with current date
+                const now = new Date();
+                const dateStr = now.toISOString().split('T')[0];
+                const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
+                const filename = `crm-visual-growth-${dateStr}-${timeStr}.html`;
+                
+                // Create and download file
+                const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                showSuccess('CRM exportado exitosamente');
+                
+            } catch (error) {
+                console.error('Error exporting CRM:', error);
+                showError('Error al exportar el CRM');
+            }
         }
 
         window.openPersonalTaskModal = function(taskId = null) {
